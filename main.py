@@ -68,8 +68,10 @@ def download_video():
     print("Video downloaded!")
 
 
+
 async def generate_voice(script):
 
+    # Remove visual instructions
     narration = re.sub(
         r"\[Visual:.*?\]",
         "",
@@ -77,17 +79,45 @@ async def generate_voice(script):
         flags=re.IGNORECASE
     )
 
-    narration = re.sub(r"\s+", " ", narration).strip()
-
-    communicate = edge_tts.Communicate(
-        narration,
-        voice="en-IN-PrabhatNeural",
-        rate="+5%"
+    # Remove title, duration and voiceover labels
+    narration = re.sub(
+        r"\*\*.*?\*\*",
+        "",
+        narration
     )
 
-    await communicate.save(str(OUTPUT / "narration.mp3"))
+    narration = re.sub(r"---", "", narration)
+    narration = re.sub(r"\s+", " ", narration).strip()
 
-    print("Voice generated!")
+    voices = [
+        "en-IN-PrabhatNeural",
+        "en-US-GuyNeural",
+        "en-GB-RyanNeural"
+    ]
+
+    for voice in voices:
+        try:
+            print(f"Trying AI voice: {voice}")
+
+            communicate = edge_tts.Communicate(
+                narration,
+                voice=voice,
+                rate="+0%"
+            )
+
+            output_file = OUTPUT / "narration.mp3"
+
+            await communicate.save(str(output_file))
+
+            if output_file.exists() and output_file.stat().st_size > 1000:
+                print(f"AI voice generated using {voice}!")
+                return
+
+        except Exception as error:
+            print(f"Voice failed: {voice}: {error}")
+
+    raise Exception("All AI voice options failed")
+
 
 
 def create_video():
