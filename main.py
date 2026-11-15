@@ -117,6 +117,7 @@ def download_scene_images(script):
 
 
 
+
 async def generate_voice(script):
 
     narration = re.sub(
@@ -140,57 +141,82 @@ async def generate_voice(script):
         try:
             print(f"Trying AI voice: {voice}")
 
+            output_file = OUTPUT / "narration.mp3"
+            subtitle_file = OUTPUT / "subtitles.srt"
+
             communicate = edge_tts.Communicate(
                 narration,
                 voice=voice,
                 rate="+0%"
             )
 
-            output_file = OUTPUT / "narration.mp3"
-            subtitle_file = OUTPUT / "subtitles.srt"
+            await communicate.save(str(output_file))
 
-            # Generate voice and subtitle timing together
+            if not output_file.exists() or output_file.stat().st_size < 1000:
+                continue
+
+            # Get actual audio duration
+            result = subprocess.run(
+                [
+                    "ffprobe", "-v", "error",
+                    "-show_entries", "format=duration",
+                    "-of", "default=noprint_wrappers=1:nokey=1",
+                    str(output_file)
+                ],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+
+            total_duration = float(result.stdout.strip())
+
+            # Divide narration into groups of 4 words
+            words = narration.split()
+            groups = [
+                words[i:i + 4]
+                for i in range(0, len(words), 4)
+            ]
+
+            weights = [sum(len(word) for word in group) for group in groups]
+            total_weight = sum(weights)
+
+            def timestamp(seconds):
+                hours = int(seconds // 3600)
+                minutes = int((seconds % 3600) // 60)
+                secs = seconds % 60
+
+                return (
+                    f"{hours:02}:"
+                    f"{minutes:02}:"
+                    f"{secs:06.3f}".replace(".", ",")
+                )
+
+            current_time = 0
+
             with open(subtitle_file, "w", encoding="utf-8") as srt:
-                index = 1
 
-                async for chunk in communicate.stream():
+                for index, group in enumerate(groups):
+                    duration = total_duration * weights[index] / total_weight
+                    end_time = current_time + duration
 
-                    if chunk["type"] == "audio":
-                        with open(output_file, "ab") as audio:
-                            audio.write(chunk["data"])
+                    srt.write(f"{index + 1}\n")
+                    srt.write(
+                        f"{timestamp(current_time)} --> "
+                        f"{timestamp(end_time)}\n"
+                    )
+                    srt.write(" ".join(group) + "\n\n")
 
-                    elif chunk["type"] == "WordBoundary":
-                        start = chunk["offset"] / 10_000_000
-                        duration = chunk["duration"] / 10_000_000
-                        end = start + duration
+                    current_time = end_time
 
-                        def timestamp(seconds):
-                            hours = int(seconds // 3600)
-                            minutes = int((seconds % 3600) // 60)
-                            secs = seconds % 60
-                            return (
-                                f"{hours:02}:"
-                                f"{minutes:02}:"
-                                f"{secs:06.3f}".replace(".", ",")
-                            )
+            print("AI voice generated!")
+            print("Subtitles generated:", subtitle_file.stat().st_size, "bytes")
 
-                        srt.write(f"{index}\n")
-                        srt.write(
-                            f"{timestamp(start)} --> "
-                            f"{timestamp(end)}\n"
-                        )
-                        srt.write(chunk["text"] + "\n\n")
-                        index += 1
-
-            if output_file.exists() and output_file.stat().st_size > 1000:
-                print(f"AI voice generated using {voice}!")
-                return
+            return
 
         except Exception as error:
             print(f"Voice failed: {voice}: {error}")
 
     raise Exception("All AI voice options failed")
-
 
 def create_video(image_files):
 
