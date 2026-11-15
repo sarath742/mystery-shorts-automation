@@ -227,6 +227,6 @@ if __name__ == "__main__":
     asyncio.run(generate_voice(script))
 
     print("Creating final YouTube Short...")
-    create_video()
+    create_video(image_files)
 
     print("AUTOMATION COMPLETED!")
