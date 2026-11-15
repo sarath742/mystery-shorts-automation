@@ -8,6 +8,12 @@ from pathlib import Path
 from google import genai
 import edge_tts
 import time
+import os
+import json
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
+from google.auth.transport.requests import Request
 
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
@@ -318,6 +324,38 @@ def create_video(image_files):
     subprocess.run(command, check=True)
 
     print("ANIMATED CARTOON VIDEO CREATED:", final_video)
+
+def upload_to_youtube(video_path):
+    token_data = json.loads(os.environ["YOUTUBE_TOKEN_JSON"])
+
+    credentials = Credentials.from_authorized_user_info(
+        token_data,
+        ["https://www.googleapis.com/auth/youtube.upload"]
+    )
+
+    if credentials.expired and credentials.refresh_token:
+        credentials.refresh(Request())
+
+    youtube = build("youtube", "v3", credentials=credentials)
+
+    request = youtube.videos().insert(
+        part="snippet,status",
+        body={
+            "snippet": {
+                "title": "Mysterious Story You Must Know! #Shorts",
+                "description": "Discover a mysterious story. Subscribe for more! #Shorts",
+                "tags": ["mystery", "facts", "shorts"],
+                "categoryId": "24"
+            },
+            "status": {
+                "privacyStatus": "private"
+            }
+        },
+        media_body=MediaFileUpload(video_path, resumable=True)
+    )
+
+    response = request.execute()
+    print("YouTube upload successful:", response["id"])
 
 
 
