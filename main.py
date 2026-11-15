@@ -168,7 +168,6 @@ async def generate_voice(script):
 
 
 def create_video(image_files):
-def create_video(image_files):
 
     narration = str(OUTPUT / "narration.mp3")
     final_video = str(OUTPUT / "final_short.mp4")
