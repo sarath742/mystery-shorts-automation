@@ -253,7 +253,18 @@ def create_video(image_files):
         f"{inputs}concat=n={len(image_files)}:v=1:a=0[outv]"
     )
 
-    subtitle_path = (OUTPUT / "subtitles.srt").as_posix()
+    subtitle_file = OUTPUT / "subtitles.srt"
+
+    print("Subtitle file exists:", subtitle_file.exists())
+
+    if not subtitle_file.exists():
+        raise Exception("subtitles.srt was not generated!")
+
+    if subtitle_file.stat().st_size == 0:
+        raise Exception("subtitles.srt is empty!")
+
+subtitle_path = str(subtitle_file.resolve())
+print("Subtitle path:", subtitle_path)
 
     filters.append(
         f"[outv]subtitles='{subtitle_path}':"
