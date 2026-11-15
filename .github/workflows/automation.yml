@@ -25,17 +25,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg
 
-          
+      - name: Run automation
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+        run: python main.py
+
       - name: Save generated video
         uses: actions/upload-artifact@v4
         with:
           name: first-mystery-short
           path: output/final_short.mp4
           retention-days: 7
-
-
-      - name: Run automation
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
-        run: python main.py
