@@ -263,8 +263,8 @@ def create_video(image_files):
     if subtitle_file.stat().st_size == 0:
         raise Exception("subtitles.srt is empty!")
 
-subtitle_path = str(subtitle_file.resolve())
-print("Subtitle path:", subtitle_path)
+    subtitle_path = str(subtitle_file.resolve())
+    print("Subtitle path:", subtitle_path)
 
     filters.append(
         f"[outv]subtitles='{subtitle_path}':"
