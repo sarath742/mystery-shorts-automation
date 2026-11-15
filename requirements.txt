@@ -3,3 +3,6 @@ requests
 python-dotenv
 Pillow
 edge-tts
+google-api-python-client
+google-auth-oauthlib
+google-auth-httplib2
