@@ -168,9 +168,17 @@ async def generate_voice(script):
 
 
 def create_video(image_files):
+def create_video(image_files):
 
     narration = str(OUTPUT / "narration.mp3")
     final_video = str(OUTPUT / "final_short.mp4")
+
+    if not image_files:
+        raise Exception("No scene images available!")
+
+    for image in image_files:
+        if not Path(image).exists():
+            raise Exception(f"Missing image: {image}")
 
     # Get narration duration
     result = subprocess.run(
@@ -188,42 +196,59 @@ def create_video(image_files):
     total_duration = float(result.stdout.strip())
     scene_duration = total_duration / len(image_files)
 
-    # Create FFmpeg image sequence
-    concat_file = OUTPUT / "images.txt"
+    command = ["ffmpeg", "-y"]
 
-    with open(concat_file, "w") as file:
-        for image in image_files:
-            file.write(f"file '{image.resolve()}'\n")
-            file.write(f"duration {scene_duration}\n")
+    # Load every image as a video input
+    for image in image_files:
+        command.extend([
+            "-loop", "1",
+            "-framerate", "30",
+            "-t", str(scene_duration),
+            "-i", str(image)
+        ])
 
-        # Repeat final image for FFmpeg
-        file.write(f"file '{image_files[-1].resolve()}'\n")
+    # Add narration
+    command.extend(["-i", narration])
 
-    command = [
-        "ffmpeg",
-        "-y",
-        "-f", "concat",
-        "-safe", "0",
-        "-i", str(concat_file),
-        "-i", narration,
-        "-vf",
-        "scale=1080:1920:force_original_aspect_ratio=increase,"
-        "crop=1080:1920,fps=30",
-        "-map", "0:v:0",
-        "-map", "1:a:0",
+    # Build video filter
+    filters = []
+
+    for i in range(len(image_files)):
+        filters.append(
+            f"[{i}:v]scale=1080:1920:"
+            f"force_original_aspect_ratio=increase,"
+            f"crop=1080:1920,setsar=1,fps=30,"
+            f"format=yuv420p[v{i}]"
+        )
+
+    inputs = "".join(
+        f"[v{i}]" for i in range(len(image_files))
+    )
+
+    filters.append(
+        f"{inputs}concat=n={len(image_files)}:v=1:a=0[outv]"
+    )
+
+    filter_complex = ";".join(filters)
+
+    command.extend([
+        "-filter_complex", filter_complex,
+        "-map", "[outv]",
+        "-map", f"{len(image_files)}:a:0",
+        "-t", str(total_duration),
         "-c:v", "libx264",
         "-preset", "ultrafast",
         "-pix_fmt", "yuv420p",
         "-c:a", "aac",
         "-b:a", "128k",
-        "-shortest",
         "-movflags", "+faststart",
         final_video
-    ]
+    ])
 
     subprocess.run(command, check=True)
 
-    print("CARTOON STORY VIDEO CREATED:", final_video)
+    print("CARTOON VIDEO CREATED:", final_video)
+
 
 
 
