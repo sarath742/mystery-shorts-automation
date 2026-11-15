@@ -7,6 +7,8 @@ import subprocess
 from pathlib import Path
 from google import genai
 import edge_tts
+import time
+
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 PIXABAY_API_KEY = os.getenv("PIXABAY_API_KEY", "").strip()
@@ -26,17 +28,33 @@ def generate_script():
     - Powerful opening hook.
     - Suspenseful storytelling.
     - Simple English.
-    - Include [Visual: description] for scenes.
+    - Include [Visual: description] for every scene.
     - End with a surprising question.
     - Use historically accurate information.
     """
 
-    response = client.models.generate_content(
-        model="gemini-3.8-flash",
-        contents=prompt
-    )
+    for attempt in range(1, 4):
+        try:
+            print(f"Generating script. Attempt {attempt}/3")
 
-    return response.text
+            response = client.models.generate_content(
+                model="gemini-3.8-flash",
+                contents=prompt
+            )
+
+            if response.text:
+                return response.text
+
+            raise Exception("Gemini returned an empty response")
+
+        except Exception as error:
+            print(f"Gemini error: {error}")
+
+            if attempt == 3:
+                raise
+
+            time.sleep(20)
+
 
 
 def download_scene_images(script):
