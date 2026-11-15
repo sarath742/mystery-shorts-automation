@@ -249,16 +249,20 @@ def create_video(image_files):
         f"[v{i}]" for i in range(len(image_files))
     )
 
+    filters.append(
+        f"{inputs}concat=n={len(image_files)}:v=1:a=0[outv]"
+    )
+
     subtitle_path = (OUTPUT / "subtitles.srt").as_posix()
 
-filters.append(
-    f"[outv]subtitles='{subtitle_path}':"
-    "force_style='FontName=Arial,FontSize=18,"
-    "PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,"
-    "BorderStyle=1,Outline=3,Shadow=1,"
-    "Alignment=2,MarginV=180'[sub]"
-)
+    filters.append(
+        f"[outv]subtitles='{subtitle_path}':"
+        "force_style='FontName=Arial,FontSize=18,"
+        "PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,"
+        "BorderStyle=1,Outline=3,Shadow=1,"
+        "Alignment=2,MarginV=180'[sub]"
     )
+
 
     command.extend([
         "-filter_complex", ";".join(filters),
