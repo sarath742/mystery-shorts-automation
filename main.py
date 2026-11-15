@@ -39,33 +39,62 @@ def generate_script():
     return response.text
 
 
-def download_video():
+def download_scene_images(script):
 
-    url = "https://pixabay.com/api/videos/"
+    # Get scene descriptions from the Gemini story
+    scenes = re.findall(
+        r"\[Visual:\s*(.*?)\]",
+        script,
+        flags=re.IGNORECASE
+    )
 
-    params = {
-        "key": PIXABAY_API_KEY,
-        "q": "mystery dark",
-        "per_page": 5
-    }
+    if not scenes:
+        scenes = [
+            "mysterious island at night cartoon illustration",
+            "dark lighthouse in fog cartoon illustration",
+            "mysterious abandoned building cartoon illustration"
+        ]
 
-    response = requests.get(url, params=params, timeout=30)
-    response.raise_for_status()
+    image_files = []
 
-    data = response.json()
+    for index, scene in enumerate(scenes):
 
-    if not data.get("hits"):
-        raise Exception("No videos found")
+        print(f"Finding cartoon image for scene {index + 1}: {scene}")
 
-    video_url = data["hits"][0]["videos"]["medium"]["url"]
+        url = "https://pixabay.com/api/"
 
-    video = requests.get(video_url, timeout=120)
-    video.raise_for_status()
+        params = {
+            "key": PIXABAY_API_KEY,
+            "q": scene,
+            "image_type": "illustration",
+            "safesearch": "true",
+            "per_page": 10
+        }
 
-    with open(OUTPUT / "background.mp4", "wb") as file:
-        file.write(video.content)
+        response = requests.get(url, params=params, timeout=30)
+        response.raise_for_status()
 
-    print("Video downloaded!")
+        data = response.json()
+
+        if not data.get("hits"):
+            raise Exception(f"No cartoon images found for: {scene}")
+
+        image_url = data["hits"][0]["largeImageURL"]
+
+        image_response = requests.get(image_url, timeout=60)
+        image_response.raise_for_status()
+
+        image_path = OUTPUT / f"scene_{index + 1:02d}.jpg"
+
+        with open(image_path, "wb") as file:
+            file.write(image_response.content)
+
+        image_files.append(image_path)
+
+        print(f"Scene {index + 1} image downloaded!")
+
+    return image_files
+
 
 
 
@@ -120,22 +149,50 @@ async def generate_voice(script):
 
 
 
-def create_video():
+def create_video(image_files):
 
-    background = str(OUTPUT / "background.mp4")
     narration = str(OUTPUT / "narration.mp3")
     final_video = str(OUTPUT / "final_short.mp4")
+
+    # Get narration duration
+    result = subprocess.run(
+        [
+            "ffprobe", "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            narration
+        ],
+        capture_output=True,
+        text=True,
+        check=True
+    )
+
+    total_duration = float(result.stdout.strip())
+    scene_duration = total_duration / len(image_files)
+
+    # Create FFmpeg image sequence
+    concat_file = OUTPUT / "images.txt"
+
+    with open(concat_file, "w") as file:
+        for image in image_files:
+            file.write(f"file '{image.resolve()}'\n")
+            file.write(f"duration {scene_duration}\n")
+
+        # Repeat final image for FFmpeg
+        file.write(f"file '{image_files[-1].resolve()}'\n")
 
     command = [
         "ffmpeg",
         "-y",
-        "-stream_loop", "-1",
-        "-i", background,
+        "-f", "concat",
+        "-safe", "0",
+        "-i", str(concat_file),
         "-i", narration,
+        "-vf",
+        "scale=1080:1920:force_original_aspect_ratio=increase,"
+        "crop=1080:1920,fps=30",
         "-map", "0:v:0",
         "-map", "1:a:0",
-        "-vf",
-        "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=30",
         "-c:v", "libx264",
         "-preset", "ultrafast",
         "-pix_fmt", "yuv420p",
@@ -148,7 +205,8 @@ def create_video():
 
     subprocess.run(command, check=True)
 
-    print("FINAL VIDEO CREATED:", final_video)
+    print("CARTOON STORY VIDEO CREATED:", final_video)
+
 
 
 if __name__ == "__main__":
@@ -162,8 +220,8 @@ if __name__ == "__main__":
 
     print(script)
 
-    print("Downloading footage...")
-    download_video()
+    print("Downloading cartoon scene images...")
+    image_files = download_scene_images(script)
 
     print("Generating AI voice...")
     asyncio.run(generate_voice(script))
