@@ -371,13 +371,16 @@ if __name__ == "__main__":
 
     print(script)
 
-    print("Downloading cartoon scene images...")
-    image_files = download_scene_images(script)
+   print("Downloading cartoon scene images...")
+image_files = download_scene_images(script)
 
-    print("Generating AI voice...")
-    asyncio.run(generate_voice(script))
+print("Generating AI voice...")
+asyncio.run(generate_voice(script))
 
-    print("Creating final YouTube Short...")
-    create_video(image_files)
+print("Creating final YouTube Short...")
+create_video(image_files)
 
-    print("AUTOMATION COMPLETED!")
+print("Uploading video to YouTube...")
+upload_to_youtube("output/final_short.mp4")
+
+print("AUTOMATION COMPLETED!")
