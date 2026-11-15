@@ -116,9 +116,9 @@ def download_scene_images(script):
 
 
 
+
 async def generate_voice(script):
 
-    # Remove visual instructions
     narration = re.sub(
         r"\[Visual:.*?\]",
         "",
@@ -126,13 +126,7 @@ async def generate_voice(script):
         flags=re.IGNORECASE
     )
 
-    # Remove title, duration and voiceover labels
-    narration = re.sub(
-        r"\*\*.*?\*\*",
-        "",
-        narration
-    )
-
+    narration = re.sub(r"\*\*.*?\*\*", "", narration)
     narration = re.sub(r"---", "", narration)
     narration = re.sub(r"\s+", " ", narration).strip()
 
@@ -153,8 +147,40 @@ async def generate_voice(script):
             )
 
             output_file = OUTPUT / "narration.mp3"
+            subtitle_file = OUTPUT / "subtitles.srt"
 
-            await communicate.save(str(output_file))
+            # Generate voice and subtitle timing together
+            with open(subtitle_file, "w", encoding="utf-8") as srt:
+                index = 1
+
+                async for chunk in communicate.stream():
+
+                    if chunk["type"] == "audio":
+                        with open(output_file, "ab") as audio:
+                            audio.write(chunk["data"])
+
+                    elif chunk["type"] == "WordBoundary":
+                        start = chunk["offset"] / 10_000_000
+                        duration = chunk["duration"] / 10_000_000
+                        end = start + duration
+
+                        def timestamp(seconds):
+                            hours = int(seconds // 3600)
+                            minutes = int((seconds % 3600) // 60)
+                            secs = seconds % 60
+                            return (
+                                f"{hours:02}:"
+                                f"{minutes:02}:"
+                                f"{secs:06.3f}".replace(".", ",")
+                            )
+
+                        srt.write(f"{index}\n")
+                        srt.write(
+                            f"{timestamp(start)} --> "
+                            f"{timestamp(end)}\n"
+                        )
+                        srt.write(chunk["text"] + "\n\n")
+                        index += 1
 
             if output_file.exists() and output_file.stat().st_size > 1000:
                 print(f"AI voice generated using {voice}!")
@@ -164,7 +190,6 @@ async def generate_voice(script):
             print(f"Voice failed: {voice}: {error}")
 
     raise Exception("All AI voice options failed")
-
 
 
 def create_video(image_files):
@@ -179,7 +204,6 @@ def create_video(image_files):
         if not Path(image).exists():
             raise Exception(f"Missing image: {image}")
 
-    # Get narration duration
     result = subprocess.run(
         [
             "ffprobe", "-v", "error",
@@ -197,7 +221,6 @@ def create_video(image_files):
 
     command = ["ffmpeg", "-y"]
 
-    # Load every image as a video input
     for image in image_files:
         command.extend([
             "-loop", "1",
@@ -206,33 +229,40 @@ def create_video(image_files):
             "-i", str(image)
         ])
 
-    # Add narration
     command.extend(["-i", narration])
 
-    # Build video filter
     filters = []
 
     for i in range(len(image_files)):
         filters.append(
             f"[{i}:v]scale=1080:1920:"
             f"force_original_aspect_ratio=increase,"
-            f"crop=1080:1920,setsar=1,fps=30,"
-            f"format=yuv420p[v{i}]"
+            f"crop=1080:1920,"
+            f"zoompan=z='min(zoom+0.0005,1.08)':"
+            f"x='iw/2-(iw/zoom/2)':"
+            f"y='ih/2-(ih/zoom/2)':"
+            f"d=1:s=1080x1920:fps=30,"
+            f"setsar=1,format=yuv420p[v{i}]"
         )
 
     inputs = "".join(
         f"[v{i}]" for i in range(len(image_files))
     )
 
-    filters.append(
-        f"{inputs}concat=n={len(image_files)}:v=1:a=0[outv]"
+    subtitle_path = (OUTPUT / "subtitles.srt").as_posix()
+
+filters.append(
+    f"[outv]subtitles='{subtitle_path}':"
+    "force_style='FontName=Arial,FontSize=18,"
+    "PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,"
+    "BorderStyle=1,Outline=3,Shadow=1,"
+    "Alignment=2,MarginV=180'[sub]"
+)
     )
 
-    filter_complex = ";".join(filters)
-
     command.extend([
-        "-filter_complex", filter_complex,
-        "-map", "[outv]",
+        "-filter_complex", ";".join(filters),
+        "-map", "[sub]",
         "-map", f"{len(image_files)}:a:0",
         "-t", str(total_duration),
         "-c:v", "libx264",
@@ -246,7 +276,7 @@ def create_video(image_files):
 
     subprocess.run(command, check=True)
 
-    print("CARTOON VIDEO CREATED:", final_video)
+    print("ANIMATED CARTOON VIDEO CREATED:", final_video)
 
 
 
