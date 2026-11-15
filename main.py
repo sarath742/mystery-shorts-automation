@@ -1,26 +1,31 @@
 
 import os
+import re
+import asyncio
 import requests
 from pathlib import Path
 from google import genai
+import edge_tts
 
-# API configuration
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 PIXABAY_API_KEY = os.getenv("PIXABAY_API_KEY", "").strip()
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
+OUTPUT = Path("output")
+OUTPUT.mkdir(exist_ok=True)
+
 
 def generate_script():
 
     prompt = """
-    Create a 45-second YouTube Shorts mystery story.
+    Create a 45-second mysterious YouTube Shorts story.
 
     Requirements:
     - Powerful opening hook.
-    - Interesting and suspenseful.
+    - Suspenseful storytelling.
     - Simple English.
-    - Include visual scene descriptions.
+    - Include [Visual: description] for scenes.
     - End with a surprising question.
     - Use historically accurate information.
     """
@@ -49,37 +54,57 @@ def download_video():
     data = response.json()
 
     if not data.get("hits"):
-        raise Exception("No Pixabay videos found")
+        raise Exception("No videos found")
 
     video_url = data["hits"][0]["videos"]["medium"]["url"]
-
-    print("Downloading video...")
 
     video = requests.get(video_url, timeout=120)
     video.raise_for_status()
 
-    Path("output").mkdir(exist_ok=True)
-
-    with open("output/background.mp4", "wb") as file:
+    with open(OUTPUT / "background.mp4", "wb") as file:
         file.write(video.content)
 
-    print("Video downloaded successfully!")
+    print("Video downloaded!")
+
+
+async def generate_voice(script):
+
+    # Remove visual instructions from narration
+    narration = re.sub(
+        r"\[Visual:.*?\]",
+        "",
+        script,
+        flags=re.IGNORECASE
+    )
+
+    narration = re.sub(r"\s+", " ", narration).strip()
+
+    communicate = edge_tts.Communicate(
+        narration,
+        voice="en-IN-PrabhatNeural",
+        rate="+5%"
+    )
+
+    await communicate.save(str(OUTPUT / "narration.mp3"))
+
+    print("AI voice generated!")
 
 
 if __name__ == "__main__":
 
-    print("Generating mystery script...")
+    print("Generating script...")
 
     script = generate_script()
-
-    print("\nGENERATED SCRIPT:\n")
-    print(script)
 
     with open("output_script.txt", "w", encoding="utf-8") as file:
         file.write(script)
 
-    print("\nSearching Pixabay footage...")
+    print(script)
 
+    print("Downloading footage...")
     download_video()
 
-    print("\nAutomation step completed!")
+    print("Generating AI voice...")
+    asyncio.run(generate_voice(script))
+
+    print("All tasks completed!")
