@@ -65,7 +65,7 @@ def download_scene_images(script):
 
         params = {
             "key": PIXABAY_API_KEY,
-            "q": scene,
+            "q": " ".join(re.findall(r"[a-zA-Z0-9]+", scene)[:8]),
             "image_type": "illustration",
             "safesearch": "true",
             "per_page": 10
