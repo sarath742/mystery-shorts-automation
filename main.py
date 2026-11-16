@@ -25,6 +25,7 @@ OUTPUT = Path("output")
 OUTPUT.mkdir(exist_ok=True)
 
 
+
 def generate_script():
 
     prompt = """
@@ -39,27 +40,36 @@ def generate_script():
     - Use historically accurate information.
     """
 
-    for attempt in range(1, 4):
-        try:
-            print(f"Generating script. Attempt {attempt}/3")
+    models = [
+        "gemini-3.8-flash",
+        "gemini-3.7-flash",
+        "gemini-3.5-flash-lite"
+    ]
 
-            response = client.models.generate_content(
-                model="gemini-3.8-flash",
-                contents=prompt
-            )
+    for model in models:
+        for attempt in range(1, 3):
+            try:
+                print(f"Trying {model}. Attempt {attempt}/2")
 
-            if response.text:
-                return response.text
+                response = client.models.generate_content(
+                    model=model,
+                    contents=prompt
+                )
 
-            raise Exception("Gemini returned an empty response")
+                if response.text:
+                    print(f"Script generated successfully using {model}")
+                    return response.text
 
-        except Exception as error:
-            print(f"Gemini error: {error}")
+                raise Exception("Empty response from Gemini")
 
-            if attempt == 3:
-                raise
+            except Exception as error:
+                print(f"Gemini error: {error}")
 
-            time.sleep(20)
+                if attempt < 2:
+                    print("Waiting 15 seconds before retry...")
+                    time.sleep(15)
+
+    raise Exception("All Gemini models failed. Please try again later.")
 
 
 
